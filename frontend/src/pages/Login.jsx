@@ -34,6 +34,7 @@ function Login() {
         localStorage.setItem('token', response.access);
         localStorage.setItem('user', response.username);
         localStorage.setItem('userId', response.user_id);
+        localStorage.setItem('userEmail', response.email || `${response.username}@example.com`);
         // Use window.location to avoid loop
         window.location.href = '/dashboard';
       } else {

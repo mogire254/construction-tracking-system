@@ -1,12 +1,13 @@
 from django.shortcuts import render
-
-# Create your views here.
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework import viewsets
 from rest_framework_simplejwt.tokens import RefreshToken
+from .models import Incident
+from .serializers import IncidentSerializer
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -23,7 +24,8 @@ def login_view(request):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'username': user.username,
-            'user_id': user.id
+            'user_id': user.id,
+            'email': user.email
         })
     else:
         return Response({
@@ -41,21 +43,18 @@ def register_view(request):
     first_name = request.data.get('first_name', '')
     last_name = request.data.get('last_name', '')
     
-    # Check if username already exists
     if User.objects.filter(username=username).exists():
         return Response({
             'success': False,
             'error': 'Username already exists'
         }, status=400)
     
-    # Check if email already exists (if provided)
     if email and User.objects.filter(email=email).exists():
         return Response({
             'success': False,
             'error': 'Email already registered'
         }, status=400)
     
-    # Create new user
     try:
         user = User.objects.create_user(
             username=username,
@@ -65,7 +64,6 @@ def register_view(request):
             last_name=last_name
         )
         
-        # Generate token for the new user
         refresh = RefreshToken.for_user(user)
         
         return Response({
@@ -74,6 +72,7 @@ def register_view(request):
             'refresh': str(refresh),
             'username': user.username,
             'user_id': user.id,
+            'email': user.email,
             'message': 'Account created successfully!'
         })
     except Exception as e:
@@ -81,3 +80,14 @@ def register_view(request):
             'success': False,
             'error': str(e)
         }, status=400)
+
+
+# Incident ViewSet - FIXED (removed reported_by filter)
+class IncidentViewSet(viewsets.ModelViewSet):
+    queryset = Incident.objects.all()
+    serializer_class = IncidentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # For now, return all incidents (simplified)
+        return Incident.objects.all()

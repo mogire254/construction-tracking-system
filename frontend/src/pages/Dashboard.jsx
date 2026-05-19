@@ -2,26 +2,28 @@ import React, { useState, useEffect } from 'react';
 import {
   Container, Grid, Card, CardContent, Typography, Box, Paper, Chip, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
-  Avatar, Divider, Snackbar, Alert, MenuItem, Rating, LinearProgress
+  Avatar, Divider, Snackbar, Alert, MenuItem, Rating, LinearProgress,
+  Collapse
 } from '@mui/material';
 import {
   Engineering, Warning, Inventory, CheckCircle, Comment, Send, Close,
-  Business, Construction, Phone, Email, Person, ThumbUp, LocationOn
+  Business, Construction, Phone, Email, Person, ThumbUp, LocationOn,
+  TrendingUp, Assignment, Build, SafetyDivider, ExpandMore, ExpandLess,
+  ArrowForward
 } from '@mui/icons-material';
+import axios from 'axios';
 
 function Dashboard() {
   const [stats, setStats] = useState({
-    totalProjects: 3,
-    openIncidents: 2,
+    totalProjects: 0,
+    openIncidents: 0,
     lowStockMaterials: 4,
     avgProgress: 68,
   });
-  const [recentProjects, setRecentProjects] = useState([
-    { id: 1, name: 'Nairobi Mall Construction', progress: 70, status: 'In Progress', location: 'Nairobi, Kenya' },
-    { id: 2, name: 'Mombasa Bridge Project', progress: 45, status: 'In Progress', location: 'Mombasa, Kenya' },
-    { id: 3, name: 'Kisumu School Building', progress: 100, status: 'Completed', location: 'Kisumu, Kenya' },
-  ]);
+  const [recentProjects, setRecentProjects] = useState([]);
+  const [recentIncidents, setRecentIncidents] = useState([]);
   const [user, setUser] = useState('');
+  const [expandedRequest, setExpandedRequest] = useState(null);
   
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -45,11 +47,53 @@ function Dashboard() {
       setComments(JSON.parse(savedComments));
     }
     
-    const savedRequests = localStorage.getItem('serviceRequests');
-    if (savedRequests) {
-      setMyRequests(JSON.parse(savedRequests));
-    }
+    fetchDashboardData();
+    fetchMyRequests();
   }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Fetch projects
+      const projectsRes = await axios.get('http://127.0.0.1:8000/api/projects/', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const projects = projectsRes.data;
+      
+      // Fetch incidents
+      const incidentsRes = await axios.get('http://127.0.0.1:8000/api/incidents/', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const incidents = incidentsRes.data;
+      const openIncidentsCount = incidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length;
+      
+      setStats({
+        totalProjects: projects.length,
+        openIncidents: openIncidentsCount,
+        lowStockMaterials: 4,
+        avgProgress: 68,
+      });
+      
+      setRecentProjects(projects.slice(0, 3));
+      setRecentIncidents(incidents.filter(i => i.status !== 'RESOLVED').slice(0, 2));
+      
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    }
+  };
+
+  const fetchMyRequests = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://127.0.0.1:8000/api/service-requests/', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMyRequests(response.data);
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+    }
+  };
 
   useEffect(() => {
     if (comments.length > 0) {
@@ -94,41 +138,59 @@ function Dashboard() {
     setServiceRequest({ ...serviceRequest, [e.target.name]: e.target.value });
   };
 
-  const handleServiceRequestSubmit = () => {
+  const handleServiceRequestSubmit = async () => {
     setSubmitting(true);
-    const newRequest = {
-      id: Date.now(),
-      ...serviceRequest,
-      status: 'PENDING',
-      admin_response: '',
-      created_at: new Date().toISOString(),
-    };
-    const updatedRequests = [newRequest, ...myRequests];
-    setMyRequests(updatedRequests);
-    localStorage.setItem('serviceRequests', JSON.stringify(updatedRequests));
-    setSnackbar({ open: true, message: 'Request sent!', severity: 'success' });
-    setOpenDialog(false);
-    setServiceRequest({ name: '', email: '', phone: '', projectType: '', description: '', budget: '', timeline: '' });
-    setSubmitting(false);
+    try {
+      const token = localStorage.getItem('token');
+      
+      const requestData = {
+        name: serviceRequest.name,
+        email: serviceRequest.email,
+        phone: serviceRequest.phone,
+        project_type: serviceRequest.projectType,
+        description: serviceRequest.description,
+        budget: serviceRequest.budget,
+        timeline: serviceRequest.timeline,
+      };
+      
+      await axios.post('http://127.0.0.1:8000/api/service-requests/', requestData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setSnackbar({ open: true, message: 'Request sent to admin!', severity: 'success' });
+      setOpenDialog(false);
+      setServiceRequest({ name: '', email: '', phone: '', projectType: '', description: '', budget: '', timeline: '' });
+      fetchMyRequests();
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Failed to submit request', severity: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleExpandRequest = (id) => {
+    setExpandedRequest(expandedRequest === id ? null : id);
   };
 
   const StatCard = ({ title, value, icon, color, onClick }) => (
     <Card sx={{ 
-      height: 90, 
-      bgcolor: color, 
-      color: 'white', 
-      cursor: 'pointer', 
-      '&:hover': { transform: 'scale(1.02)' },
-      backdropFilter: 'blur(5px)',
-      backgroundColor: `${color}dd`,
+      borderRadius: 2,
+      background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`,
+      color: 'white',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      '&:hover': { transform: 'scale(1.02)', boxShadow: 6 },
+      height: 80,
     }} onClick={onClick}>
-      <CardContent sx={{ py: 1.5 }}>
+      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
-            <Typography variant="caption">{title}</Typography>
-            <Typography variant="h4">{value}</Typography>
+            <Typography variant="caption" sx={{ opacity: 0.9 }}>{title}</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{value}</Typography>
           </Box>
-          <Box>{icon}</Box>
+          <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', width: 40, height: 40 }}>
+            {icon}
+          </Avatar>
         </Box>
       </CardContent>
     </Card>
@@ -138,202 +200,210 @@ function Dashboard() {
     if (status === 'APPROVED') return 'success';
     if (status === 'REJECTED') return 'error';
     if (status === 'IN_PROGRESS') return 'warning';
-    if (status === 'COMPLETED') return 'success';
     return 'default';
   };
 
   const getStatusLabel = (status) => {
-    if (status === 'APPROVED') return 'Approved';
-    if (status === 'REJECTED') return 'Rejected';
+    if (status === 'APPROVED') return 'Approved ✓';
+    if (status === 'REJECTED') return 'Rejected ✗';
     if (status === 'IN_PROGRESS') return 'In Progress';
-    if (status === 'COMPLETED') return 'Completed';
-    return 'Pending';
+    return 'Pending ⏳';
+  };
+
+  const getSeverityColor = (severity) => {
+    switch(severity) {
+      case 'HIGH': return '#f44336';
+      case 'MEDIUM': return '#ed6c02';
+      case 'LOW': return '#2e7d32';
+      case 'CRITICAL': return '#dc004e';
+      default: return '#1976d2';
+    }
   };
 
   return (
     <Box sx={{
       minHeight: '100vh',
-      backgroundImage: 'url("https://images.pexels.com/photos/163789/construction-worker-building-architect-163789.jpeg?auto=compress&cs=tinysrgb&w=1600")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed',
-      backgroundRepeat: 'no-repeat',
-      position: 'relative',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        zIndex: 1,
-      },
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%)',
+      py: 2,
     }}>
-      <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2, py: 3 }}>
-        {/* Welcome Section */}
-        <Paper sx={{ p: 2, mb: 2, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
-          <Typography variant="h5">Welcome, {user}! 👷</Typography>
-          <Typography variant="body2" color="textSecondary">Here's what's happening with your construction projects today.</Typography>
-        </Paper>
-        
+      <Container maxWidth="xl" sx={{ px: 2 }}>
+        {/* Welcome Header */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1a237e' }}>
+            Welcome, {user}! 👷
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Your construction projects at a glance
+          </Typography>
+        </Box>
+
         {/* Stats Cards */}
-        <Grid container spacing={1.5}>
+        <Grid container spacing={1.5} sx={{ mb: 2 }}>
           <Grid item xs={6} sm={3}>
-            <StatCard title="Active Projects" value={stats.totalProjects} icon={<Engineering />} color="#1976d2" onClick={() => window.location.href = '/projects'} />
+            <StatCard title="Active Projects" value={stats.totalProjects} icon={<Engineering sx={{ fontSize: 24 }} />} color="#1976d2" onClick={() => window.location.href = '/projects'} />
           </Grid>
           <Grid item xs={6} sm={3}>
-            <StatCard title="Open Incidents" value={stats.openIncidents} icon={<Warning />} color="#dc004e" onClick={() => window.location.href = '/incidents'} />
+            <StatCard title="Open Incidents" value={stats.openIncidents} icon={<Warning sx={{ fontSize: 24 }} />} color="#dc004e" onClick={() => window.location.href = '/incidents'} />
           </Grid>
           <Grid item xs={6} sm={3}>
-            <StatCard title="Low Stock" value={stats.lowStockMaterials} icon={<Inventory />} color="#ed6c02" onClick={() => window.location.href = '/materials'} />
+            <StatCard title="Low Stock" value={stats.lowStockMaterials} icon={<Inventory sx={{ fontSize: 24 }} />} color="#ed6c02" onClick={() => window.location.href = '/materials'} />
           </Grid>
           <Grid item xs={6} sm={3}>
-            <StatCard title="Avg Progress" value={`${stats.avgProgress}%`} icon={<CheckCircle />} color="#2e7d32" />
+            <StatCard title="Avg Progress" value={`${stats.avgProgress}%`} icon={<TrendingUp sx={{ fontSize: 24 }} />} color="#2e7d32" />
           </Grid>
         </Grid>
-        
-        {/* Construction Services Section */}
-        <Paper sx={{ mt: 2, p: 2, background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 100%)', color: 'white', borderRadius: 2 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={8}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Construction />
-                <Typography variant="h6">Need Construction Services?</Typography>
-              </Box>
-              <Typography variant="caption">Quality work, on-time delivery, safe construction.</Typography>
-              <Button size="small" variant="contained" startIcon={<Business />} onClick={() => setOpenDialog(true)} sx={{ mt: 1, bgcolor: '#ff9800', color: '#1a237e' }}>
-                Request Free Quote
-              </Button>
-            </Grid>
-            <Grid item xs={4} sx={{ textAlign: 'center' }}>
-              <Construction sx={{ fontSize: 60, opacity: 0.8 }} />
-            </Grid>
-          </Grid>
-        </Paper>
-        
-        {/* Three Sections Side by Side */}
-        <Grid container spacing={2} sx={{ mt: 1 }}>
-          {/* Recent Projects - Left */}
+
+        {/* Three Sections */}
+        <Grid container spacing={1.5}>
+          {/* Recent Projects */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 1.5, height: '100%', minHeight: 400, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold" mb={1}>📋 Recent Projects</Typography>
-              <Divider />
-              <Box sx={{ mt: 1, maxHeight: 350, overflow: 'auto' }}>
-                {recentProjects.map((project) => (
-                  <Card key={project.id} sx={{ mb: 1, bgcolor: '#fafafa' }}>
-                    <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+            <Paper sx={{ 
+              p: 1.5, 
+              borderRadius: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              '&:hover': { boxShadow: 3 }
+            }} onClick={() => window.location.href = '/projects'}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Assignment sx={{ fontSize: 18, color: '#1976d2' }} /> Recent Projects
+                </Typography>
+                <ArrowForward sx={{ fontSize: 16, color: '#1976d2' }} />
+              </Box>
+              <Divider sx={{ mb: 1 }} />
+              <Box>
+                {recentProjects.length === 0 ? (
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', textAlign: 'center', py: 2 }}>
+                    No projects yet
+                  </Typography>
+                ) : (
+                  recentProjects.map((project) => (
+                    <Box key={project.id} sx={{ mb: 1 }}>
                       <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" fontWeight="bold">{project.name}</Typography>
-                        <Chip label={project.status} size="small" color={project.status === 'Completed' ? 'success' : 'primary'} />
+                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{project.name}</Typography>
+                        <Chip label={project.status?.replace('_', ' ') || 'Planning'} size="small" color={project.status === 'COMPLETED' ? 'success' : 'primary'} />
                       </Box>
-                      <Box display="flex" alignItems="center" gap={0.5} mt={0.5}>
-                        <LocationOn sx={{ fontSize: 12, color: 'text.secondary' }} />
-                        <Typography variant="caption" color="textSecondary">{project.location}</Typography>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <LocationOn sx={{ fontSize: 10, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="textSecondary">{project.location || 'Location not set'}</Typography>
                       </Box>
-                      <Box sx={{ mt: 1 }}>
-                        <Box display="flex" justifyContent="space-between" mb={0.5}>
-                          <Typography variant="caption">Progress</Typography>
-                          <Typography variant="caption" fontWeight="bold">{project.progress}%</Typography>
-                        </Box>
-                        <LinearProgress variant="determinate" value={project.progress} sx={{ height: 4, borderRadius: 2 }} />
-                      </Box>
-                    </CardContent>
-                  </Card>
-                ))}
-                <Button size="small" fullWidth onClick={() => window.location.href = '/projects'} sx={{ mt: 1 }}>View All →</Button>
+                      <LinearProgress variant="determinate" value={project.progress_percentage || 0} sx={{ height: 3, borderRadius: 2, mt: 0.5 }} />
+                    </Box>
+                  ))
+                )}
               </Box>
             </Paper>
           </Grid>
-          
-          {/* My Service Requests - Middle */}
+
+          {/* Open Incidents - NEW SECTION */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 1.5, height: '100%', minHeight: 400, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
+            <Paper sx={{ 
+              p: 1.5, 
+              borderRadius: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              '&:hover': { boxShadow: 3 }
+            }} onClick={() => window.location.href = '/incidents'}>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="subtitle1" fontWeight="bold">📝 My Requests</Typography>
-                <Button size="small" variant="outlined" startIcon={<Business />} onClick={() => setOpenDialog(true)}>New</Button>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Warning sx={{ fontSize: 18, color: '#dc004e' }} /> Open Incidents
+                </Typography>
+                <ArrowForward sx={{ fontSize: 16, color: '#dc004e' }} />
               </Box>
-              <Divider />
-              <Box sx={{ mt: 1, maxHeight: 350, overflow: 'auto' }}>
-                {myRequests.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 3, bgcolor: '#f9f9f9', borderRadius: 1 }}>
-                    <Business sx={{ fontSize: 40, color: '#ccc' }} />
-                    <Typography variant="caption" color="textSecondary">No requests yet</Typography>
+              <Divider sx={{ mb: 1 }} />
+              <Box>
+                {recentIncidents.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography variant="caption" color="textSecondary">
+                      No open incidents
+                    </Typography>
+                    <Button 
+                      size="small" 
+                      variant="outlined" 
+                      startIcon={<Warning />} 
+                      onClick={(e) => { e.stopPropagation(); window.location.href = '/incidents'; }}
+                      sx={{ mt: 1, fontSize: 11 }}
+                    >
+                      Report Incident
+                    </Button>
                   </Box>
                 ) : (
-                  myRequests.map((req) => (
-                    <Card key={req.id} sx={{ mb: 1, borderLeft: `3px solid ${req.status === 'APPROVED' ? '#4caf50' : req.status === 'REJECTED' ? '#f44336' : '#ff9800'}` }}>
-                      <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                        <Box display="flex" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" fontWeight="bold">
-                            {req.projectType?.replace('_', ' ').toUpperCase() || 'Project'}
-                          </Typography>
-                          <Chip label={getStatusLabel(req.status)} size="small" color={getStatusColor(req.status)} />
-                        </Box>
-                        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
-                          {req.description?.substring(0, 60)}...
-                        </Typography>
-                        {req.admin_response && (
-                          <Box sx={{ mt: 1, p: 0.5, bgcolor: '#e3f2fd', borderRadius: 1 }}>
-                            <Typography variant="caption" color="primary">✓ {req.admin_response}</Typography>
-                          </Box>
-                        )}
-                        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
-                          {new Date(req.created_at).toLocaleDateString()}
-                        </Typography>
-                      </CardContent>
-                    </Card>
+                  recentIncidents.map((incident) => (
+                    <Box key={incident.id} sx={{ mb: 1, p: 0.5, bgcolor: '#fef5e8', borderRadius: 1 }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{incident.title}</Typography>
+                        <Chip 
+                          label={incident.severity} 
+                          size="small" 
+                          sx={{ bgcolor: getSeverityColor(incident.severity), color: 'white', height: 20, fontSize: '0.65rem' }}
+                        />
+                      </Box>
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        {incident.location || 'Location not specified'}
+                      </Typography>
+                    </Box>
                   ))
+                )}
+                {recentIncidents.length > 0 && (
+                  <Button 
+                    size="small" 
+                    variant="outlined" 
+                    startIcon={<Warning />} 
+                    onClick={(e) => { e.stopPropagation(); window.location.href = '/incidents'; }}
+                    sx={{ mt: 1, fontSize: 11, width: '100%' }}
+                  >
+                    Report New Incident
+                  </Button>
                 )}
               </Box>
             </Paper>
           </Grid>
-          
-          {/* Comments & Feedback - Right */}
+
+          {/* Service Requests */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 1.5, height: '100%', minHeight: 400, bgcolor: 'rgba(255,255,255,0.95)', borderRadius: 2 }}>
+            <Paper sx={{ p: 1.5, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="subtitle1" fontWeight="bold">💬 Comments & Feedback</Typography>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Rating value={averageRating} readOnly precision={0.5} size="small" />
-                  <Typography variant="caption">({comments.length})</Typography>
-                </Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Build sx={{ fontSize: 18, color: '#ed6c02' }} /> Service Requests
+                </Typography>
+                <Button size="small" variant="contained" startIcon={<Business sx={{ fontSize: 14 }} />} onClick={() => setOpenDialog(true)} sx={{ py: 0, px: 1, fontSize: 11 }}>
+                  New
+                </Button>
               </Box>
-              <Divider />
-              
-              {/* Add Comment */}
-              <Box sx={{ mt: 1 }}>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Typography variant="caption">Rate:</Typography>
-                  <Rating value={newRating} onChange={(e, v) => setNewRating(v || 0)} size="small" />
-                </Box>
-                <Box display="flex" gap={1}>
-                  <TextField fullWidth size="small" placeholder="Share your thoughts..." value={newComment} onChange={(e) => setNewComment(e.target.value)} multiline rows={2} />
-                  <Button variant="contained" size="small" onClick={handleAddComment} disabled={!newComment.trim()}>Post</Button>
-                </Box>
-              </Box>
-              
-              {/* Comments List */}
-              <Box sx={{ mt: 1, maxHeight: 280, overflow: 'auto' }}>
-                {comments.length === 0 ? (
-                  <Typography color="textSecondary" align="center" sx={{ py: 2 }}>No comments yet.</Typography>
+              <Divider sx={{ mb: 1 }} />
+              <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                {myRequests.length === 0 ? (
+                  <Typography variant="caption" color="textSecondary" align="center" sx={{ display: 'block', py: 2 }}>
+                    No requests yet. Click "New" to get a quote.
+                  </Typography>
                 ) : (
-                  comments.map((comment) => (
-                    <Card key={comment.id} sx={{ mb: 1, bgcolor: '#f9f9f9' }}>
-                      <CardContent sx={{ py: 0.5, '&:last-child': { pb: 0.5 } }}>
+                  myRequests.slice(0, 3).map((req) => (
+                    <Card key={req.id} sx={{ mb: 1, borderRadius: 1, boxShadow: 'none', bgcolor: '#f8f9fa', borderLeft: `3px solid ${req.status === 'APPROVED' ? '#4caf50' : '#ff9800'}` }}>
+                      <CardContent sx={{ py: 0.5, px: 1, '&:last-child': { pb: 0.5 } }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center">
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Avatar sx={{ width: 24, height: 24, bgcolor: '#1976d2', fontSize: 12 }}>{comment.user?.charAt(0) || 'U'}</Avatar>
-                            <Typography variant="caption" fontWeight="bold">{comment.user}</Typography>
-                            <Rating value={comment.rating || 0} readOnly size="small" />
-                            <Typography variant="caption" color="textSecondary">{comment.date.split(',')[0]}</Typography>
-                          </Box>
-                          <IconButton size="small" onClick={() => handleDeleteComment(comment.id)}><Close fontSize="small" /></IconButton>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                            {req.project_type?.replace('_', ' ').substring(0, 15) || 'Project'}
+                          </Typography>
+                          <Chip label={getStatusLabel(req.status)} size="small" color={getStatusColor(req.status)} sx={{ height: 18, fontSize: 10 }} />
                         </Box>
-                        <Typography variant="caption" display="block" sx={{ ml: 4 }}>{comment.text}</Typography>
-                        <Button size="small" onClick={() => handleLikeComment(comment.id)} startIcon={<ThumbUp sx={{ fontSize: 12 }} />} sx={{ ml: 3, mt: 0.5, fontSize: 11 }}>
-                          {comment.likes} Likes
-                        </Button>
+                        {req.status === 'APPROVED' && req.contact_person && (
+                          <Button size="small" onClick={() => handleExpandRequest(req.id)} sx={{ p: 0, mt: 0.5, fontSize: 10 }}>
+                            {expandedRequest === req.id ? <ExpandLess sx={{ fontSize: 14 }} /> : <ExpandMore sx={{ fontSize: 14 }} />}
+                            {expandedRequest === req.id ? 'Hide' : 'Show Contact'}
+                          </Button>
+                        )}
+                        <Collapse in={expandedRequest === req.id}>
+                          <Box sx={{ mt: 0.5, p: 0.5, bgcolor: '#e8eaf6', borderRadius: 1 }}>
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Person sx={{ fontSize: 12 }} />
+                              <Typography variant="caption">{req.contact_person}</Typography>
+                            </Box>
+                            <Box display="flex" alignItems="center" gap={0.5}>
+                              <Phone sx={{ fontSize: 12 }} />
+                              <Typography variant="caption">{req.contact_phone}</Typography>
+                            </Box>
+                          </Box>
+                        </Collapse>
                       </CardContent>
                     </Card>
                   ))
@@ -342,38 +412,106 @@ function Dashboard() {
             </Paper>
           </Grid>
         </Grid>
-        
-        {/* Service Request Dialog */}
-        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Request Construction Services</DialogTitle>
-          <DialogContent>
-            <TextField fullWidth label="Full Name" name="name" margin="dense" required value={serviceRequest.name} onChange={handleServiceRequestChange} />
-            <TextField fullWidth label="Email" name="email" type="email" margin="dense" required value={serviceRequest.email} onChange={handleServiceRequestChange} />
-            <TextField fullWidth label="Phone" name="phone" margin="dense" required value={serviceRequest.phone} onChange={handleServiceRequestChange} />
-            <TextField fullWidth select label="Project Type" name="projectType" margin="dense" required value={serviceRequest.projectType} onChange={handleServiceRequestChange}>
-              <MenuItem value="">Select</MenuItem>
-              <MenuItem value="residential">Residential</MenuItem>
-              <MenuItem value="commercial">Commercial</MenuItem>
-              <MenuItem value="road">Road Construction</MenuItem>
-              <MenuItem value="bridge">Bridge Construction</MenuItem>
-              <MenuItem value="renovation">Renovation</MenuItem>
-            </TextField>
-            <TextField fullWidth label="Budget (KES)" name="budget" margin="dense" value={serviceRequest.budget} onChange={handleServiceRequestChange} />
-            <TextField fullWidth label="Timeline" name="timeline" margin="dense" value={serviceRequest.timeline} onChange={handleServiceRequestChange} />
-            <TextField fullWidth multiline rows={2} label="Description" name="description" margin="dense" required value={serviceRequest.description} onChange={handleServiceRequestChange} />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-            <Button onClick={handleServiceRequestSubmit} variant="contained" disabled={submitting}>
-              {submitting ? 'Sending...' : 'Submit'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-        
-        <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-          <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
-        </Snackbar>
+
+        {/* Need Services Banner */}
+        <Paper sx={{ 
+          mt: 1.5, 
+          p: 1.5, 
+          borderRadius: 2,
+          background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 100%)',
+          color: 'white'
+        }}>
+          <Grid container spacing={1} alignItems="center">
+            <Grid item xs={8}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <SafetyDivider sx={{ fontSize: 28 }} />
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Need Construction Services?</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9 }}>Free quote, quality work</Typography>
+                </Box>
+              </Box>
+            </Grid>
+            <Grid item xs={4} sx={{ textAlign: 'right' }}>
+              <Button size="small" variant="contained" startIcon={<Business sx={{ fontSize: 14 }} />} onClick={() => setOpenDialog(true)} sx={{ bgcolor: '#ff9800', color: '#1a237e', py: 0.5 }}>
+                Quote
+              </Button>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Comments & Feedback Section */}
+        <Paper sx={{ p: 1.5, mt: 1.5, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Comment sx={{ fontSize: 18, color: '#dc004e' }} /> Comments & Feedback
+            </Typography>
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Rating value={averageRating} readOnly precision={0.5} size="small" />
+              <Typography variant="caption">({comments.length})</Typography>
+            </Box>
+          </Box>
+          <Divider sx={{ mb: 1 }} />
+          
+          <Box display="flex" gap={0.5} mb={1}>
+            <Rating value={newRating} onChange={(e, v) => setNewRating(v || 0)} size="small" />
+          </Box>
+          <Box display="flex" gap={0.5}>
+            <TextField size="small" placeholder="Share your thoughts..." value={newComment} onChange={(e) => setNewComment(e.target.value)} fullWidth sx={{ '& .MuiInputBase-root': { fontSize: 12 } }} />
+            <Button size="small" variant="contained" onClick={handleAddComment} disabled={!newComment.trim()} sx={{ minWidth: 50 }}>Post</Button>
+          </Box>
+          
+          <Box sx={{ maxHeight: 150, overflow: 'auto', mt: 1 }}>
+            {comments.length === 0 ? (
+              <Typography variant="caption" color="textSecondary" align="center" sx={{ display: 'block', py: 1 }}>No comments yet</Typography>
+            ) : (
+              comments.slice(0, 2).map((comment) => (
+                <Box key={comment.id} sx={{ mb: 1, p: 0.5, bgcolor: '#f8f9fa', borderRadius: 1 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Avatar sx={{ width: 18, height: 18, bgcolor: '#1976d2', fontSize: 10 }}>{comment.user?.charAt(0) || 'U'}</Avatar>
+                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{comment.user}</Typography>
+                      <Rating value={comment.rating} readOnly size="small" />
+                    </Box>
+                    <IconButton size="small" onClick={() => handleDeleteComment(comment.id)}><Close sx={{ fontSize: 12 }} /></IconButton>
+                  </Box>
+                  <Typography variant="caption" display="block">{comment.text.substring(0, 50)}</Typography>
+                  <Button size="small" onClick={() => handleLikeComment(comment.id)} startIcon={<ThumbUp sx={{ fontSize: 12 }} />} sx={{ fontSize: 10 }}>{comment.likes}</Button>
+                </Box>
+              ))
+            )}
+          </Box>
+        </Paper>
       </Container>
+
+      {/* Service Request Dialog */}
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ py: 1.5 }}>Request Construction Services</DialogTitle>
+        <DialogContent>
+          <TextField fullWidth label="Full Name" name="name" margin="dense" size="small" required value={serviceRequest.name} onChange={handleServiceRequestChange} />
+          <TextField fullWidth label="Email" name="email" type="email" margin="dense" size="small" required value={serviceRequest.email} onChange={handleServiceRequestChange} />
+          <TextField fullWidth label="Phone" name="phone" margin="dense" size="small" required value={serviceRequest.phone} onChange={handleServiceRequestChange} />
+          <TextField fullWidth select label="Project Type" name="projectType" margin="dense" size="small" required value={serviceRequest.projectType} onChange={handleServiceRequestChange}>
+            <MenuItem value="">Select</MenuItem>
+            <MenuItem value="residential">Residential</MenuItem>
+            <MenuItem value="commercial">Commercial</MenuItem>
+            <MenuItem value="road">Road Construction</MenuItem>
+            <MenuItem value="bridge">Bridge Construction</MenuItem>
+          </TextField>
+          <TextField fullWidth label="Budget (KES)" name="budget" margin="dense" size="small" value={serviceRequest.budget} />
+          <TextField fullWidth label="Timeline" name="timeline" margin="dense" size="small" value={serviceRequest.timeline} />
+          <TextField fullWidth multiline rows={2} label="Description" name="description" margin="dense" size="small" required value={serviceRequest.description} />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button onClick={handleServiceRequestSubmit} variant="contained" disabled={submitting}>
+            {submitting ? 'Sending...' : 'Submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert severity={snackbar.severity}>{snackbar.message}</Alert>
+      </Snackbar>
     </Box>
   );
 }
