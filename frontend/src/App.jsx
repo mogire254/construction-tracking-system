@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import Incidents from './pages/Incidents';
 import Materials from './pages/Materials';
+import Workers from './pages/Workers';
 import Navbar from './components/Navbar';
 
 const theme = createTheme({
@@ -32,6 +33,7 @@ function App() {
           <Route path="/projects" element={isAuthenticated ? <Projects /> : <Navigate to="/login" />} />
           <Route path="/incidents" element={isAuthenticated ? <Incidents /> : <Navigate to="/login" />} />
           <Route path="/materials" element={isAuthenticated ? <Materials /> : <Navigate to="/login" />} />
+          <Route path="/workers" element={isAuthenticated ? <Workers /> : <Navigate to="/login" />} />
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
       </BrowserRouter>

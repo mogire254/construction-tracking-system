@@ -38,10 +38,13 @@ class ServiceRequest(models.Model):
     admin_response = models.TextField(blank=True, help_text="Response from admin to the user")
     admin_notes = models.TextField(blank=True, help_text="Internal admin notes")
     
-    # Contact information for approved requests (ADD THESE 3 FIELDS)
-    contact_person = models.CharField(max_length=200, blank=True, help_text="Contact person for the job (e.g., Project Manager)")
-    contact_phone = models.CharField(max_length=20, blank=True, help_text="Contact phone number (e.g., +254704071967)")
+    # Contact information for approved requests
+    contact_person = models.CharField(max_length=200, blank=True, help_text="Contact person for the job")
+    contact_phone = models.CharField(max_length=20, blank=True, help_text="Contact phone number")
     contact_email = models.EmailField(blank=True, help_text="Contact email address")
+    office_location = models.CharField(max_length=300, blank=True, help_text="Office address")
+    office_phone = models.CharField(max_length=20, blank=True, help_text="Office phone number")
+    personal_phone = models.CharField(max_length=20, blank=True, help_text="Personal mobile number")
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -53,7 +56,3 @@ class ServiceRequest(models.Model):
     @property
     def is_approved(self):
         return self.status == 'APPROVED'
-    
-    @property
-    def has_contact_info(self):
-        return bool(self.contact_person or self.contact_phone or self.contact_email)

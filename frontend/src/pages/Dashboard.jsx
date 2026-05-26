@@ -3,13 +3,12 @@ import {
   Container, Grid, Card, CardContent, Typography, Box, Paper, Chip, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
   Avatar, Divider, Snackbar, Alert, MenuItem, Rating, LinearProgress,
-  Collapse
+  InputAdornment
 } from '@mui/material';
 import {
   Engineering, Warning, Inventory, CheckCircle, Comment, Send, Close,
   Business, Construction, Phone, Email, Person, ThumbUp, LocationOn,
-  TrendingUp, Assignment, Build, SafetyDivider, ExpandMore, ExpandLess,
-  ArrowForward
+  TrendingUp, Assignment, Build, SafetyDivider, ArrowForward
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -23,7 +22,8 @@ function Dashboard() {
   const [recentProjects, setRecentProjects] = useState([]);
   const [recentIncidents, setRecentIncidents] = useState([]);
   const [user, setUser] = useState('');
-  const [expandedRequest, setExpandedRequest] = useState(null);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
   
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -55,13 +55,11 @@ function Dashboard() {
     try {
       const token = localStorage.getItem('token');
       
-      // Fetch projects
       const projectsRes = await axios.get('http://127.0.0.1:8000/api/projects/', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const projects = projectsRes.data;
       
-      // Fetch incidents
       const incidentsRes = await axios.get('http://127.0.0.1:8000/api/incidents/', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -72,7 +70,7 @@ function Dashboard() {
         totalProjects: projects.length,
         openIncidents: openIncidentsCount,
         lowStockMaterials: 4,
-        avgProgress: 68,
+        avgProgress: projects.length > 0 ? Math.round(projects.reduce((sum, p) => sum + (p.progress_percentage || 0), 0) / projects.length) : 0,
       });
       
       setRecentProjects(projects.slice(0, 3));
@@ -168,8 +166,9 @@ function Dashboard() {
     }
   };
 
-  const handleExpandRequest = (id) => {
-    setExpandedRequest(expandedRequest === id ? null : id);
+  const handleViewContactDetails = (request) => {
+    setSelectedRequest(request);
+    setContactDialogOpen(true);
   };
 
   const StatCard = ({ title, value, icon, color, onClick }) => (
@@ -201,13 +200,6 @@ function Dashboard() {
     if (status === 'REJECTED') return 'error';
     if (status === 'IN_PROGRESS') return 'warning';
     return 'default';
-  };
-
-  const getStatusLabel = (status) => {
-    if (status === 'APPROVED') return 'Approved ✓';
-    if (status === 'REJECTED') return 'Rejected ✗';
-    if (status === 'IN_PROGRESS') return 'In Progress';
-    return 'Pending ⏳';
   };
 
   const getSeverityColor = (severity) => {
@@ -295,7 +287,7 @@ function Dashboard() {
             </Paper>
           </Grid>
 
-          {/* Open Incidents - NEW SECTION */}
+          {/* Open Incidents */}
           <Grid item xs={12} md={4}>
             <Paper sx={{ 
               p: 1.5, 
@@ -371,39 +363,50 @@ function Dashboard() {
                 </Button>
               </Box>
               <Divider sx={{ mb: 1 }} />
-              <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+              <Box sx={{ maxHeight: 280, overflow: 'auto' }}>
                 {myRequests.length === 0 ? (
                   <Typography variant="caption" color="textSecondary" align="center" sx={{ display: 'block', py: 2 }}>
                     No requests yet. Click "New" to get a quote.
                   </Typography>
                 ) : (
-                  myRequests.slice(0, 3).map((req) => (
-                    <Card key={req.id} sx={{ mb: 1, borderRadius: 1, boxShadow: 'none', bgcolor: '#f8f9fa', borderLeft: `3px solid ${req.status === 'APPROVED' ? '#4caf50' : '#ff9800'}` }}>
+                  myRequests.map((req) => (
+                    <Card key={req.id} sx={{ 
+                      mb: 1, 
+                      borderRadius: 1, 
+                      boxShadow: 'none', 
+                      bgcolor: req.status === 'APPROVED' ? '#e8f5e9' : '#f8f9fa',
+                      borderLeft: `4px solid ${req.status === 'APPROVED' ? '#4caf50' : '#ff9800'}`
+                    }}>
                       <CardContent sx={{ py: 0.5, px: 1, '&:last-child': { pb: 0.5 } }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center">
                           <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                             {req.project_type?.replace('_', ' ').substring(0, 15) || 'Project'}
                           </Typography>
-                          <Chip label={getStatusLabel(req.status)} size="small" color={getStatusColor(req.status)} sx={{ height: 18, fontSize: 10 }} />
+                          <Chip 
+                            label={req.status === 'APPROVED' ? 'Approved ✓' : 'Pending ⏳'} 
+                            size="small" 
+                            color={req.status === 'APPROVED' ? 'success' : 'default'} 
+                            sx={{ height: 18, fontSize: 10 }}
+                          />
                         </Box>
-                        {req.status === 'APPROVED' && req.contact_person && (
-                          <Button size="small" onClick={() => handleExpandRequest(req.id)} sx={{ p: 0, mt: 0.5, fontSize: 10 }}>
-                            {expandedRequest === req.id ? <ExpandLess sx={{ fontSize: 14 }} /> : <ExpandMore sx={{ fontSize: 14 }} />}
-                            {expandedRequest === req.id ? 'Hide' : 'Show Contact'}
+                        
+                        {/* View Contact Details Button */}
+                        {req.status === 'APPROVED' && (
+                          <Button 
+                            size="small" 
+                            variant="outlined"
+                            color="primary"
+                            fullWidth
+                            onClick={() => handleViewContactDetails(req)}
+                            sx={{ mt: 0.5, p: 0.5, fontSize: 10 }}
+                          >
+                            View Contact Details
                           </Button>
                         )}
-                        <Collapse in={expandedRequest === req.id}>
-                          <Box sx={{ mt: 0.5, p: 0.5, bgcolor: '#e8eaf6', borderRadius: 1 }}>
-                            <Box display="flex" alignItems="center" gap={0.5}>
-                              <Person sx={{ fontSize: 12 }} />
-                              <Typography variant="caption">{req.contact_person}</Typography>
-                            </Box>
-                            <Box display="flex" alignItems="center" gap={0.5}>
-                              <Phone sx={{ fontSize: 12 }} />
-                              <Typography variant="caption">{req.contact_phone}</Typography>
-                            </Box>
-                          </Box>
-                        </Collapse>
+                        
+                        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+                          📅 {new Date(req.created_at).toLocaleDateString()}
+                        </Typography>
                       </CardContent>
                     </Card>
                   ))
@@ -483,28 +486,180 @@ function Dashboard() {
         </Paper>
       </Container>
 
+      {/* Contact Details Dialog - Clean Version (No Call Button, No Project Details) */}
+      <Dialog 
+        open={contactDialogOpen} 
+        onClose={() => setContactDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#1a237e', color: 'white' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">📞 Contact Information</Typography>
+            <IconButton onClick={() => setContactDialogOpen(false)} sx={{ color: 'white' }}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedRequest && (
+            <Box>
+              {/* Office Information */}
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: '#bbdefb', borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🏢 Office Information
+                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Box display="flex" alignItems="flex-start" gap={2} sx={{ mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 120 }}>Office Location:</Typography>
+                    <Typography variant="body2">{selectedRequest.office_location || 'Times Tower, 4th Floor Room 200, Nairobi'}</Typography>
+                  </Box>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 120 }}>Office Phone:</Typography>
+                    <Typography variant="body2">{selectedRequest.office_phone || '0714347129'}</Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* Personal Contact */}
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: '#c8e6c9', borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  👤 Personal Contact
+                </Typography>
+                <Box sx={{ mt: 1 }}>
+                  <Box display="flex" alignItems="center" gap={2} sx={{ mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 120 }}>Contact Person:</Typography>
+                    <Typography variant="body2">{selectedRequest.contact_person || 'Muthoni Muthoga'}</Typography>
+                  </Box>
+                  <Box display="flex" alignItems="center" gap={2} sx={{ mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 120 }}>Contact Phone:</Typography>
+                    <Typography variant="body2">{selectedRequest.contact_phone || '0713688443'}</Typography>
+                  </Box>
+                  <Box display="flex" alignItems="center" gap={2} sx={{ mb: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 120 }}>Personal Phone:</Typography>
+                    <Typography variant="body2">{selectedRequest.personal_phone || '0704071967'}</Typography>
+                  </Box>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 120 }}>Contact Email:</Typography>
+                    <Typography variant="body2">{selectedRequest.contact_email || 'muthoni@construction.com'}</Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setContactDialogOpen(false)} variant="outlined">Close</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Service Request Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ py: 1.5 }}>Request Construction Services</DialogTitle>
+        <DialogTitle sx={{ py: 1.5, bgcolor: '#f5f5f5' }}>
+          <Typography variant="h6">Request Construction Services</Typography>
+        </DialogTitle>
         <DialogContent>
-          <TextField fullWidth label="Full Name" name="name" margin="dense" size="small" required value={serviceRequest.name} onChange={handleServiceRequestChange} />
-          <TextField fullWidth label="Email" name="email" type="email" margin="dense" size="small" required value={serviceRequest.email} onChange={handleServiceRequestChange} />
-          <TextField fullWidth label="Phone" name="phone" margin="dense" size="small" required value={serviceRequest.phone} onChange={handleServiceRequestChange} />
-          <TextField fullWidth select label="Project Type" name="projectType" margin="dense" size="small" required value={serviceRequest.projectType} onChange={handleServiceRequestChange}>
-            <MenuItem value="">Select</MenuItem>
-            <MenuItem value="residential">Residential</MenuItem>
-            <MenuItem value="commercial">Commercial</MenuItem>
-            <MenuItem value="road">Road Construction</MenuItem>
-            <MenuItem value="bridge">Bridge Construction</MenuItem>
+          <TextField
+            fullWidth
+            label="Full Name *"
+            name="name"
+            margin="dense"
+            size="small"
+            required
+            value={serviceRequest.name}
+            onChange={handleServiceRequestChange}
+          />
+          <TextField
+            fullWidth
+            label="Email *"
+            name="email"
+            type="email"
+            margin="dense"
+            size="small"
+            required
+            value={serviceRequest.email}
+            onChange={handleServiceRequestChange}
+          />
+          <TextField
+            fullWidth
+            label="Phone *"
+            name="phone"
+            margin="dense"
+            size="small"
+            required
+            value={serviceRequest.phone}
+            onChange={handleServiceRequestChange}
+          />
+          <TextField
+            fullWidth
+            select
+            label="Project Type *"
+            name="projectType"
+            margin="dense"
+            size="small"
+            required
+            value={serviceRequest.projectType}
+            onChange={handleServiceRequestChange}
+          >
+            <MenuItem value="">Select project type</MenuItem>
+            <MenuItem value="residential">🏠 Residential Building</MenuItem>
+            <MenuItem value="commercial">🏢 Commercial Building</MenuItem>
+            <MenuItem value="road">🛣️ Road Construction</MenuItem>
+            <MenuItem value="bridge">🌉 Bridge Construction</MenuItem>
+            <MenuItem value="renovation">🔨 Renovation</MenuItem>
+            <MenuItem value="industrial">🏭 Industrial Building</MenuItem>
+            <MenuItem value="water">💧 Water Supply System</MenuItem>
+            <MenuItem value="other">📋 Other</MenuItem>
           </TextField>
-          <TextField fullWidth label="Budget (KES)" name="budget" margin="dense" size="small" value={serviceRequest.budget} />
-          <TextField fullWidth label="Timeline" name="timeline" margin="dense" size="small" value={serviceRequest.timeline} />
-          <TextField fullWidth multiline rows={2} label="Description" name="description" margin="dense" size="small" required value={serviceRequest.description} />
+          
+          <TextField
+            fullWidth
+            label="Budget (KES)"
+            name="budget"
+            type="number"
+            margin="dense"
+            size="small"
+            value={serviceRequest.budget}
+            onChange={handleServiceRequestChange}
+            placeholder="e.g., 5000000"
+            InputProps={{
+              startAdornment: <InputAdornment position="start">KES</InputAdornment>,
+            }}
+          />
+          
+          <TextField
+            fullWidth
+            label="Timeline"
+            name="timeline"
+            margin="dense"
+            size="small"
+            value={serviceRequest.timeline}
+            onChange={handleServiceRequestChange}
+            placeholder="e.g., 6 months"
+          />
+          
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="Project Description *"
+            name="description"
+            margin="dense"
+            size="small"
+            required
+            value={serviceRequest.description}
+            onChange={handleServiceRequestChange}
+            placeholder="Describe what you need built..."
+          />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button onClick={handleServiceRequestSubmit} variant="contained" disabled={submitting}>
-            {submitting ? 'Sending...' : 'Submit'}
+          <Button 
+            onClick={handleServiceRequestSubmit} 
+            variant="contained" 
+            disabled={submitting || !serviceRequest.name || !serviceRequest.email || !serviceRequest.projectType}
+          >
+            {submitting ? 'Sending...' : 'Submit Request'}
           </Button>
         </DialogActions>
       </Dialog>

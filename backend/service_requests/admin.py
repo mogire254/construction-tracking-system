@@ -20,8 +20,8 @@ class ServiceRequestAdmin(admin.ModelAdmin):
             'description': 'Update status and respond to the user'
         }),
         ('Contact Information (For Approved Requests)', {
-            'fields': ('contact_person', 'contact_phone', 'contact_email'),
-            'description': 'Add contact details when approving a request. These will be visible to the user.',
+            'fields': ('contact_person', 'contact_phone', 'contact_email', 'office_location', 'office_phone', 'personal_phone'),
+            'description': 'Add contact details when approving a request',
             'classes': ('wide',)
         }),
         ('Timestamps', {
@@ -33,21 +33,21 @@ class ServiceRequestAdmin(admin.ModelAdmin):
     actions = ['mark_as_approved', 'mark_as_rejected', 'mark_as_in_progress', 'mark_as_completed']
     
     def mark_as_approved(self, request, queryset):
-        updated = queryset.update(status='APPROVED')
-        self.message_user(request, f'{updated} request(s) marked as Approved.')
+        queryset.update(status='APPROVED')
+        self.message_user(request, f'{queryset.count()} request(s) marked as Approved.')
     mark_as_approved.short_description = "Mark selected requests as Approved"
     
     def mark_as_rejected(self, request, queryset):
-        updated = queryset.update(status='REJECTED')
-        self.message_user(request, f'{updated} request(s) marked as Rejected.')
+        queryset.update(status='REJECTED')
+        self.message_user(request, f'{queryset.count()} request(s) marked as Rejected.')
     mark_as_rejected.short_description = "Mark selected requests as Rejected"
     
     def mark_as_in_progress(self, request, queryset):
-        updated = queryset.update(status='IN_PROGRESS')
-        self.message_user(request, f'{updated} request(s) marked as In Progress.')
+        queryset.update(status='IN_PROGRESS')
+        self.message_user(request, f'{queryset.count()} request(s) marked as In Progress.')
     mark_as_in_progress.short_description = "Mark selected requests as In Progress"
     
     def mark_as_completed(self, request, queryset):
-        updated = queryset.update(status='COMPLETED')
-        self.message_user(request, f'{updated} request(s) marked as Completed.')
+        queryset.update(status='COMPLETED')
+        self.message_user(request, f'{queryset.count()} request(s) marked as Completed.')
     mark_as_completed.short_description = "Mark selected requests as Completed"

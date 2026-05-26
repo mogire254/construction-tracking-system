@@ -1,13 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button } from '@mui/material';
-import { Dashboard, Build, Warning, Logout } from '@mui/icons-material';
+import { Dashboard, Build, Warning, Logout, People } from '@mui/icons-material';
 
 function Navbar() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // Clear ALL localStorage items (not just user and token)
+    // Clear ALL localStorage items
     localStorage.clear();
     // Use window.location to force a full page reload and clear state
     window.location.href = '/login';
@@ -34,6 +34,10 @@ function Navbar() {
         
         <Button color="inherit" onClick={() => navigate('/materials')}>
           <Build sx={{ mr: 1 }} /> Materials
+        </Button>
+        
+        <Button color="inherit" onClick={() => navigate('/workers')}>
+          <People sx={{ mr: 1 }} /> Workers
         </Button>
         
         <Button color="inherit" onClick={handleLogout}>

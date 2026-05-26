@@ -3,12 +3,13 @@ import {
   Container, Typography, Grid, Card, CardContent, CardActions, Button,
   LinearProgress, Chip, Box, Dialog, DialogTitle, DialogContent,
   DialogActions, TextField, MenuItem, IconButton, Snackbar, Alert,
-  Paper, InputAdornment, Tooltip, Fab, ImageList, ImageListItem
+  Paper, InputAdornment, Tooltip, Tab, Tabs, FormControl, InputLabel, Select,
+  CircularProgress, Divider
 } from '@mui/material';
 import {
   LocationOn, AttachMoney, CalendarToday, Edit, Visibility,
   Close, Save, Add, Search, FilterList, Refresh, Image,
-  CheckCircle, Pending, TrendingUp
+  CheckCircle, Pending, TrendingUp, PhotoCamera, Assignment
 } from '@mui/icons-material';
 import { getProjects } from '../services/api';
 import axios from 'axios';
@@ -19,14 +20,29 @@ function Projects() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [workLogs, setWorkLogs] = useState({});
+  const [loadingWorkLogs, setLoadingWorkLogs] = useState(false);
   
   // Dialog states
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [workLogDialogOpen, setWorkLogDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedTab, setSelectedTab] = useState(0);
   const [updateProgress, setUpdateProgress] = useState('');
   const [updateStatus, setUpdateStatus] = useState('');
   const [updateNotes, setUpdateNotes] = useState('');
+  
+  // Work Log states
+  const [workLogData, setWorkLogData] = useState({
+    work_type: 'DONE',
+    title: '',
+    description: '',
+    photo: null
+  });
+  const [workLogImagePreview, setWorkLogImagePreview] = useState(null);
+  const [submittingWorkLog, setSubmittingWorkLog] = useState(false);
+  
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
@@ -38,14 +54,31 @@ function Projects() {
   }, [searchTerm, statusFilter, projects]);
 
   const fetchProjects = async () => {
+    setLoading(true);
     try {
       const data = await getProjects();
       setProjects(data);
       setFilteredProjects(data);
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setSnackbar({ open: true, message: 'Failed to load projects', severity: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWorkLogs = async (projectId) => {
+    setLoadingWorkLogs(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://127.0.0.1:8000/api/work-logs/?project=${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setWorkLogs(prev => ({ ...prev, [projectId]: response.data }));
+    } catch (error) {
+      console.error('Error fetching work logs:', error);
+    } finally {
+      setLoadingWorkLogs(false);
     }
   };
 
@@ -66,9 +99,11 @@ function Projects() {
     setFilteredProjects(filtered);
   };
 
-  const handleViewDetails = (project) => {
+  const handleViewDetails = async (project) => {
     setSelectedProject(project);
+    setSelectedTab(0);
     setViewDialogOpen(true);
+    await fetchWorkLogs(project.id);
   };
 
   const handleUpdateProgress = (project) => {
@@ -100,6 +135,61 @@ function Projects() {
     }
   };
 
+  const handleWorkLogChange = (e) => {
+    setWorkLogData({ ...workLogData, [e.target.name]: e.target.value });
+  };
+
+  const handleWorkLogImageChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setWorkLogData({ ...workLogData, photo: file });
+      setWorkLogImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleAddWorkLog = async () => {
+    if (!workLogData.title || !workLogData.description) {
+      setSnackbar({ open: true, message: 'Please fill title and description', severity: 'warning' });
+      return;
+    }
+    
+    setSubmittingWorkLog(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('project', selectedProject.id);
+      formData.append('work_type', workLogData.work_type);
+      formData.append('title', workLogData.title);
+      formData.append('description', workLogData.description);
+      if (workLogData.photo) {
+        formData.append('photo', workLogData.photo);
+      }
+      
+      const response = await axios.post('http://127.0.0.1:8000/api/work-logs/', formData, {
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      // Update local state with new work log
+      setWorkLogs(prev => ({
+        ...prev,
+        [selectedProject.id]: [...(prev[selectedProject.id] || []), response.data]
+      }));
+      
+      setSnackbar({ open: true, message: 'Work update added!', severity: 'success' });
+      setWorkLogDialogOpen(false);
+      setWorkLogData({ work_type: 'DONE', title: '', description: '', photo: null });
+      setWorkLogImagePreview(null);
+    } catch (error) {
+      console.error('Error adding work log:', error);
+      setSnackbar({ open: true, message: error.response?.data?.detail || 'Failed to add work update', severity: 'error' });
+    } finally {
+      setSubmittingWorkLog(false);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch(status) {
       case 'IN_PROGRESS': return 'primary';
@@ -122,7 +212,7 @@ function Projects() {
   if (loading) {
     return (
       <Container sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
-        <Typography>Loading projects...</Typography>
+        <CircularProgress />
       </Container>
     );
   }
@@ -140,11 +230,6 @@ function Projects() {
               <IconButton onClick={fetchProjects} size="small">
                 <Refresh />
               </IconButton>
-            </Tooltip>
-            <Tooltip title="Add new project">
-              <Fab size="small" color="primary" sx={{ width: 32, height: 32 }}>
-                <Add sx={{ fontSize: 18 }} />
-              </Fab>
             </Tooltip>
           </Box>
           
@@ -171,13 +256,6 @@ function Projects() {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               sx={{ width: 130 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <FilterList sx={{ fontSize: 18 }} />
-                  </InputAdornment>
-                ),
-              }}
             >
               <MenuItem value="ALL">All</MenuItem>
               <MenuItem value="PLANNING">Planning</MenuItem>
@@ -260,23 +338,19 @@ function Projects() {
                 )}
                 
                 <CardContent sx={{ flexGrow: 1 }}>
-                  {/* Header */}
                   <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
                       {project.name}
                     </Typography>
-                    <Tooltip title={`Status: ${project.status?.replace('_', ' ') || 'Planning'}`}>
-                      <Chip 
-                        icon={getStatusIcon(project.status)}
-                        label={project.status?.replace('_', ' ') || 'Planning'}
-                        size="small"
-                        color={getStatusColor(project.status)}
-                        sx={{ fontSize: '0.7rem', height: 24 }}
-                      />
-                    </Tooltip>
+                    <Chip 
+                      icon={getStatusIcon(project.status)}
+                      label={project.status?.replace('_', ' ') || 'Planning'}
+                      size="small"
+                      color={getStatusColor(project.status)}
+                      sx={{ fontSize: '0.7rem', height: 24 }}
+                    />
                   </Box>
                   
-                  {/* Location */}
                   <Box display="flex" alignItems="center" gap={0.5} mb={1}>
                     <LocationOn sx={{ fontSize: 14, color: 'text.secondary' }} />
                     <Typography variant="caption" color="textSecondary">
@@ -284,13 +358,11 @@ function Projects() {
                     </Typography>
                   </Box>
                   
-                  {/* Description */}
                   <Typography variant="body2" color="textSecondary" sx={{ mb: 1.5, fontSize: '0.75rem' }}>
                     {project.description?.substring(0, 80) || 'No description provided'}
                     {project.description?.length > 80 && '...'}
                   </Typography>
                   
-                  {/* Progress Bar */}
                   <Box sx={{ mb: 1.5 }}>
                     <Box display="flex" justifyContent="space-between" mb={0.5}>
                       <Typography variant="caption" color="textSecondary">Progress</Typography>
@@ -304,7 +376,6 @@ function Projects() {
                     />
                   </Box>
                   
-                  {/* Financial Details */}
                   <Box display="flex" flexDirection="column" gap={0.5}>
                     <Box display="flex" alignItems="center" gap={0.5}>
                       <AttachMoney sx={{ fontSize: 12, color: 'text.secondary' }} />
@@ -343,30 +414,25 @@ function Projects() {
                   </Box>
                 </CardContent>
                 
-                {/* Action Buttons */}
                 <CardActions sx={{ p: 1.5, pt: 0, gap: 1 }}>
-                  <Tooltip title="View full project details">
-                    <Button 
-                      size="small" 
-                      variant="outlined"
-                      startIcon={<Visibility />}
-                      onClick={() => handleViewDetails(project)}
-                      sx={{ flex: 1, textTransform: 'none' }}
-                    >
-                      View Details
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="Update project progress">
-                    <Button 
-                      size="small" 
-                      variant="contained"
-                      startIcon={<Edit />}
-                      onClick={() => handleUpdateProgress(project)}
-                      sx={{ flex: 1, textTransform: 'none' }}
-                    >
-                      Update Progress
-                    </Button>
-                  </Tooltip>
+                  <Button 
+                    size="small" 
+                    variant="outlined"
+                    startIcon={<Visibility />}
+                    onClick={() => handleViewDetails(project)}
+                    sx={{ flex: 1, textTransform: 'none' }}
+                  >
+                    View Details
+                  </Button>
+                  <Button 
+                    size="small" 
+                    variant="contained"
+                    startIcon={<Edit />}
+                    onClick={() => handleUpdateProgress(project)}
+                    sx={{ flex: 1, textTransform: 'none' }}
+                  >
+                    Update Progress
+                  </Button>
                 </CardActions>
               </Card>
             </Grid>
@@ -374,11 +440,11 @@ function Projects() {
         )}
       </Grid>
 
-      {/* View Details Dialog */}
+      {/* View Details Dialog with Work Logs */}
       <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Project Details</Typography>
+            <Typography variant="h6">{selectedProject?.name} - Project Details</Typography>
             <IconButton onClick={() => setViewDialogOpen(false)}>
               <Close />
             </IconButton>
@@ -456,16 +522,61 @@ function Projects() {
               <Typography variant="body2" sx={{ mb: 1 }}>
                 <strong>🔄 Progress:</strong> {selectedProject.progress_percentage || 0}%
               </Typography>
-              {selectedProject.completed_at && (
-                <Typography variant="body2" sx={{ mb: 1, color: 'success.main' }}>
-                  <strong>✅ Completed:</strong> {new Date(selectedProject.completed_at).toLocaleString()}
-                </Typography>
-              )}
-              {selectedProject.completion_notes && (
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>📝 Completion Notes:</strong> {selectedProject.completion_notes}
-                </Typography>
-              )}
+              
+              <Divider sx={{ my: 2 }} />
+              
+              {/* Daily Work Updates Section */}
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">📋 Daily Work Updates</Typography>
+                <Button 
+                  variant="contained" 
+                  startIcon={<Add />} 
+                  onClick={() => setWorkLogDialogOpen(true)} 
+                  size="small"
+                >
+                  Add Update
+                </Button>
+              </Box>
+              
+              <Tabs value={selectedTab} onChange={(e, v) => setSelectedTab(v)} sx={{ mb: 2 }}>
+                <Tab label="✅ Work Done" />
+                <Tab label="📋 Work To Be Done" />
+              </Tabs>
+              
+              <Box sx={{ maxHeight: 350, overflow: 'auto' }}>
+                {loadingWorkLogs ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <CircularProgress size={30} />
+                  </Box>
+                ) : (workLogs[selectedProject.id] || []).filter(log => (selectedTab === 0 ? log.work_type === 'DONE' : log.work_type === 'TODO')).length === 0 ? (
+                  <Paper sx={{ p: 3, textAlign: 'center', bgcolor: '#f9f9f9' }}>
+                    <Assignment sx={{ fontSize: 48, color: '#ccc' }} />
+                    <Typography>No {selectedTab === 0 ? 'work done' : 'planned work'} yet.</Typography>
+                    <Button size="small" startIcon={<Add />} onClick={() => setWorkLogDialogOpen(true)} sx={{ mt: 1 }}>
+                      Add your first update
+                    </Button>
+                  </Paper>
+                ) : (
+                  (workLogs[selectedProject.id] || []).filter(log => (selectedTab === 0 ? log.work_type === 'DONE' : log.work_type === 'TODO')).map((log) => (
+                    <Card key={log.id} sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{log.title}</Typography>
+                        <Typography variant="body2" color="textSecondary">{log.description}</Typography>
+                        {log.photo && (
+                          <img 
+                            src={log.photo} 
+                            alt="Work" 
+                            style={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 8, marginTop: 10 }} 
+                          />
+                        )}
+                        <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 1 }}>
+                          Added by: {log.created_by_name || 'Unknown'} on {new Date(log.created_at).toLocaleDateString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </Box>
             </Box>
           )}
         </DialogContent>
@@ -536,6 +647,96 @@ function Projects() {
           <Button onClick={() => setUpdateDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSaveProgress} variant="contained" startIcon={<Save />}>
             Save Progress
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Work Update Dialog */}
+      <Dialog open={workLogDialogOpen} onClose={() => setWorkLogDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Daily Work Update</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth margin="dense" size="small">
+            <InputLabel>Work Type</InputLabel>
+            <Select
+              name="work_type"
+              value={workLogData.work_type}
+              onChange={handleWorkLogChange}
+              label="Work Type"
+            >
+              <MenuItem value="DONE">✅ Work Done</MenuItem>
+              <MenuItem value="TODO">📋 Work To Be Done</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <TextField
+            fullWidth
+            label="Title"
+            name="title"
+            margin="dense"
+            size="small"
+            required
+            value={workLogData.title}
+            onChange={handleWorkLogChange}
+            placeholder="e.g., Foundation pouring completed"
+          />
+          
+          <TextField
+            fullWidth
+            label="Description"
+            name="description"
+            multiline
+            rows={3}
+            margin="dense"
+            size="small"
+            required
+            value={workLogData.description}
+            onChange={handleWorkLogChange}
+            placeholder="Detailed description of the work..."
+          />
+          
+          <Button
+            variant="outlined"
+            component="label"
+            startIcon={<PhotoCamera />}
+            sx={{ mt: 1 }}
+          >
+            Upload Photo
+            <input
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={handleWorkLogImageChange}
+            />
+          </Button>
+          
+          {workLogImagePreview && (
+            <Box sx={{ mt: 1, position: 'relative' }}>
+              <img 
+                src={workLogImagePreview} 
+                alt="Preview" 
+                style={{ width: '100%', maxHeight: 100, objectFit: 'cover', borderRadius: 8 }} 
+              />
+              <IconButton
+                size="small"
+                sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'white' }}
+                onClick={() => {
+                  setWorkLogImagePreview(null);
+                  setWorkLogData({ ...workLogData, photo: null });
+                }}
+              >
+                <Close fontSize="small" />
+              </IconButton>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWorkLogDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleAddWorkLog} 
+            variant="contained" 
+            disabled={submittingWorkLog || !workLogData.title || !workLogData.description}
+          >
+            {submittingWorkLog ? 'Adding...' : 'Add Update'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -32,7 +32,9 @@ INSTALLED_APPS = [
     'construction_projects',
     'site_incidents',
     'stock_management',
-    'service_requests',  # ← ADDED THIS LINE
+    'service_requests',
+    'workers',
+    'work_logs',  # ← ADDED WORK_LOGS APP
 ]
 
 MIDDLEWARE = [
